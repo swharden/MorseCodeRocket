@@ -1,10 +1,42 @@
-const audioContext = new window.AudioContext();
+let audioContext = null;
+let isSending = false;
+
+function SetSpinner(visible) {
+    const spinner = document.getElementById('spinner');
+    if (visible) {
+        spinner.classList.remove('invisible');
+    } else {
+        spinner.classList.add('invisible');
+    }
+}
+
+function SetMessage(message) {
+    document.getElementById('messageTextarea').value = message;
+}
+function StopSending() {
+    document.getElementById('upcomingDiv').innerText = '';
+}
 
 function StartSending() {
-    const text = document.getElementById('messageTextarea').value.toUpperCase();
-    document.getElementById('upcomingDiv').innerText = text;
+    if (!audioContext) {
+        audioContext = new AudioContext();
+    }
+    let message = document.getElementById('messageTextarea').value.toUpperCase();
+    message = message
+        .replaceAll("\n\n", "\n")
+        .replaceAll(":", ".")
+        .replaceAll("[", "(")
+        .replaceAll("]", ")")
+        .replaceAll("(", "")
+        .replaceAll(")", "")
+    message = message.replace(/(?:\r\n|\r|\n)/g, ' - ');
+
+    document.getElementById('upcomingDiv').innerText = message;
     document.getElementById('sentDiv').innerText = '';
-    SendNextLetter();
+    if (!isSending) {
+        isSending = true;
+        SendNextLetter();
+    }
 }
 
 function GetLetterSymbols(letter) {
@@ -16,16 +48,15 @@ function GetLetterSymbols(letter) {
         'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--',
         'Z': '--..', '1': '.----', '2': '..---', '3': '...--', '4': '....-',
         '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.',
-        '0': '-----', ' ': ' '
+        '0': '-----',
+        ' ': ' ',
+        '?': '..--..',
+        ',': '--..--',
+        '.': '-...-',
+        '-': '-...-',
+        '–': '-...-',
     };
-    const symbols = morseCode[letter.toUpperCase()];
-
-    if (!symbols) {
-        console.error(`Unknown letter: ${letter}`);
-        return null;
-    }
-
-    return symbols;
+    return morseCode[letter.toUpperCase()];
 }
 
 function PlayWaveform(arr) {
@@ -69,21 +100,25 @@ function SendNextLetter() {
 
     const upcomingDiv = document.getElementById('upcomingDiv');
     const sendingDiv = document.getElementById('sendingDiv');
-    const sendingRow = document.getElementById('sendingRow');
     const sentDiv = document.getElementById('sentDiv');
 
-    if (upcomingDiv.innerText) {
-        sendingRow.classList.remove('invisible');
-    } else {
-        sendingRow.classList.add('invisible');
+    if (!upcomingDiv.innerText) {
+        isSending = false;
+        sendingDiv.innerText = ' ';
+        sentDiv.innerText = ' ';
         return;
     }
 
-    const letter = upcomingDiv.innerText[0];
-    const symbols = GetLetterSymbols(letter);
+    let letter = upcomingDiv.innerText[0];
+    let symbols = GetLetterSymbols(letter);
+    console.log({ letter });
+    if (!symbols) {
+        letter = '?';
+        symbols = GetLetterSymbols('?');
+    }
 
     upcomingDiv.innerText = upcomingDiv.innerText.substring(1);
-    sendingDiv.innerText = `${letter} ${symbols}`;
+    sendingDiv.innerText = letter == ' ' ? '(space)' : `${letter} ${symbols}`;
     sentDiv.innerText += letter;
 
     /*
@@ -93,8 +128,16 @@ function SendNextLetter() {
     The space between letters is 3 time units.
     The space between words is 7 time units.
     */
+
     const symbolWPM = document.getElementById('symbolWpm').value;
     const msPerUnit = 1.2 / symbolWPM * 1000;
+
+    const letterWpm = document.getElementById('letterWpm').value;
+    const msPerLetterUnit = 1.2 / letterWpm * 1000;
+    const msecBetweenLetters = msPerLetterUnit * 3;
+
+    console.log({letterWpm, symbolWPM});
+
     const wave = [];
     symbols.split("").forEach(symbol => {
         if (symbol == '.') {
@@ -104,18 +147,17 @@ function SendNextLetter() {
             wave.push(...GetToneWaveform(msPerUnit * 3));
             wave.push(...GetToneWaveform(msPerUnit, 0));
         } else if (symbol == ' ') {
-            wave.push(...GetToneWaveform(msPerUnit * 7, 0));
+            // leave wave empty
         } else {
             console.error(`Unknown symbol: ${symbol}`);
         }
     });
 
-    PlayWaveform(wave);
+    if (wave.length) {
+        PlayWaveform(wave);
+    }
 
-    const letterWpm = document.getElementById('letterWpm').value;
-    const msPerLetterUnit = 1.2 / letterWpm * 1000;
     const msecForAllSymbols = wave.length / audioContext.sampleRate * 1000;
-    const msecBetweenLetters = msPerLetterUnit * 3;
     const msecBeforeNextLetter = msecForAllSymbols + msecBetweenLetters;
     setTimeout(() => { SendNextLetter() }, msecBeforeNextLetter);
 }
