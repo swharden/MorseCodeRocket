@@ -1,6 +1,19 @@
 let audioContext = null;
 let isSending = false;
 
+function ToggleMessageVisibility() {
+    console.log('toggling');
+    if (document.getElementById('showTextCheck').checked) {
+        document.getElementById('outgoingMessageDiv').classList.remove('collapse');
+    } else {
+        document.getElementById('outgoingMessageDiv').classList.add('collapse');
+    }
+}
+
+function ShowMessageRow() {
+    document.getElementById('messageRow').classList.remove("collapse");
+}
+
 function SetSpinner(visible) {
     const spinner = document.getElementById('spinner');
     if (visible) {
@@ -15,6 +28,11 @@ function SetMessage(message) {
 }
 function StopSending() {
     document.getElementById('upcomingDiv').innerText = '';
+}
+
+let IsPaused = false;
+function PauseSending() {
+    IsPaused = !IsPaused;
 }
 
 function StartSending() {
@@ -98,6 +116,11 @@ function GetToneWaveform(durationMsec, volume = 0.5) {
 
 function SendNextLetter() {
 
+    if (IsPaused) {
+        setTimeout(() => { SendNextLetter() }, 100);
+        return;
+    }
+
     const upcomingDiv = document.getElementById('upcomingDiv');
     const sendingDiv = document.getElementById('sendingDiv');
     const sentDiv = document.getElementById('sentDiv');
@@ -111,7 +134,6 @@ function SendNextLetter() {
 
     let letter = upcomingDiv.innerText[0];
     let symbols = GetLetterSymbols(letter);
-    console.log({ letter });
     if (!symbols) {
         letter = '?';
         symbols = GetLetterSymbols('?');
@@ -135,8 +157,6 @@ function SendNextLetter() {
     const letterWpm = document.getElementById('letterWpm').value;
     const msPerLetterUnit = 1.2 / letterWpm * 1000;
     const msecBetweenLetters = msPerLetterUnit * 3;
-
-    console.log({letterWpm, symbolWPM});
 
     const wave = [];
     symbols.split("").forEach(symbol => {
